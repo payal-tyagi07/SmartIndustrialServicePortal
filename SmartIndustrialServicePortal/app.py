@@ -6,9 +6,11 @@ from functools import wraps
 import os
 from datetime import datetime
 import mysql.connector as mysql_connector
+from flask_socketio import SocketIO
 
 app = Flask(__name__)
 app.config.from_pyfile('config.py')
+socketio = SocketIO(app, async_mode='threading', cors_allowed_origins=[])
 
 # Ensure upload directory exists
 os.makedirs(app.config.get('UPLOAD_FOLDER', 'static/uploads'), exist_ok=True)
@@ -566,6 +568,7 @@ def admin_update_ticket():
 
     mysql.connection.commit()
     cur.close()
+    socketio.emit('dashboard_refresh', {'complaint_id': complaint_id})
     
     flash(f"Ticket #{complaint_id} updated successfully.", "success")
     return redirect('/admin/complaints')
@@ -578,6 +581,7 @@ def admin_delete_complaint(complaint_id):
     cur.execute("DELETE FROM complaints WHERE complaint_id=%s", (complaint_id,))
     mysql.connection.commit()
     cur.close()
+    socketio.emit('dashboard_refresh', {'complaint_id': complaint_id, 'deleted': True})
     flash(f"Ticket #{complaint_id} deleted successfully.", "success")
     return redirect('/admin/complaints')
 

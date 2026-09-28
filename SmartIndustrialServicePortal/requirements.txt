@@ -11,3 +11,5 @@ email-validator>=2.1
 gunicorn>=22.0
 pytest>=8.0
 Pillow>=10.0
+mysql-connector-python
+Flask-SocketIO>=5.3
