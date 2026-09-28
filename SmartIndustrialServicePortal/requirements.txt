@@ -1,4 +1,9 @@
-Flask
-Werkzeug
-mysql-connector-python
-gunicorn
+Flask>=3.0,<4.0
+Flask-SQLAlchemy>=3.1
+Flask-Migrate>=4.0
+Flask-WTF>=1.2
+PyMySQL>=1.1
+python-dotenv>=1.0
+email-validator>=2.1
+gunicorn>=22.0
+pytest>=8.0
