@@ -37,6 +37,49 @@ def dashboard():
     return render_template("admin_dashboard.html", complaints=db.session.scalars(select(Complaint)).all())
 
 
+@admin_bp.get("/analytics")
+@admin_required
+def analytics():
+    """Analytics are calculated from the filtered, non-deleted complaint set."""
+    query = select(Complaint).where(Complaint.is_deleted.is_(False)).options(selectinload(Complaint.assignment).selectinload(Assignment.technician))
+    start, end = request.args.get("start"), request.args.get("end")
+    department, technician_id = request.args.get("department"), request.args.get("technician_id", type=int)
+    if start:
+        query = query.where(Complaint.created_at >= datetime.fromisoformat(start))
+    if end:
+        query = query.where(Complaint.created_at < datetime.fromisoformat(end).replace(hour=23, minute=59, second=59))
+    if department:
+        query = query.where(Complaint.reported_department == department)
+    if technician_id:
+        query = query.join(Assignment).where(Assignment.technician_id == technician_id)
+    tickets = db.session.scalars(query).all()
+    resolved = [t for t in tickets if t.status == "Resolved" and t.assignment and t.assignment.completed_at]
+    mttr_hours = round(sum((t.assignment.completed_at - t.created_at).total_seconds() / 3600 for t in resolved) / len(resolved), 2) if resolved else 0
+    sla_checked = [t for t in resolved if t.sla_due_at]
+    sla_percent = round(100 * sum(t.assignment.completed_at <= t.sla_due_at for t in sla_checked) / len(sla_checked), 1) if sla_checked else 0
+    performance = {}
+    for ticket in tickets:
+        if ticket.assignment:
+            row = performance.setdefault(ticket.assignment.technician.full_name, {"resolved": 0, "active": 0})
+            row["resolved" if ticket.status == "Resolved" else "active"] += 1
+    months, heatmap, hotspots = {}, {}, {}
+    for ticket in tickets:
+        months[ticket.created_at.strftime("%Y-%m")] = months.get(ticket.created_at.strftime("%Y-%m"), 0) + 1
+        heatmap.setdefault(ticket.reported_department, {}).setdefault(ticket.status, 0)
+        heatmap[ticket.reported_department][ticket.status] += 1
+        if ticket.priority == "Critical":
+            hotspots[ticket.location] = hotspots.get(ticket.location, 0) + 1
+    analytics_data = {
+        "mttr_hours": mttr_hours, "sla_percent": sla_percent,
+        "performance": [{"name": name, **values} for name, values in sorted(performance.items(), key=lambda item: (-item[1]["resolved"], item[1]["active"]))],
+        "months": dict(sorted(months.items())), "heatmap": heatmap,
+        "hotspots": dict(sorted(hotspots.items(), key=lambda item: item[1], reverse=True)[:10]),
+    }
+    departments = db.session.scalars(select(Complaint.reported_department).where(Complaint.is_deleted.is_(False)).distinct().order_by(Complaint.reported_department)).all()
+    technicians = db.session.scalars(select(Technician).order_by(Technician.full_name)).all()
+    return render_template("admin_analytics.html", data=analytics_data, departments=departments, technicians=technicians)
+
+
 @admin_bp.get("/complaints")
 @admin_required
 def complaints():
