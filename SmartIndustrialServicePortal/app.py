@@ -144,6 +144,34 @@ def initialize_database():
         """)
 
         cursor.execute("""
+        CREATE TABLE IF NOT EXISTS technicians (
+            technician_id INT AUTO_INCREMENT PRIMARY KEY,
+            full_name VARCHAR(100) NOT NULL,
+            email VARCHAR(120) UNIQUE NOT NULL,
+            phone VARCHAR(30),
+            department VARCHAR(100) NOT NULL,
+            skills TEXT,
+            availability VARCHAR(20) NOT NULL DEFAULT 'Available',
+            is_active TINYINT(1) NOT NULL DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """)
+
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS assignment_history (
+            history_id INT AUTO_INCREMENT PRIMARY KEY,
+            complaint_id INT NOT NULL,
+            technician_id INT NULL,
+            assigned_by INT NOT NULL,
+            action VARCHAR(30) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (complaint_id) REFERENCES complaints(complaint_id) ON DELETE CASCADE,
+            FOREIGN KEY (technician_id) REFERENCES technicians(technician_id) ON DELETE SET NULL,
+            FOREIGN KEY (assigned_by) REFERENCES admin(id) ON DELETE CASCADE
+        )
+        """)
+
+        cursor.execute("""
         CREATE TABLE IF NOT EXISTS feedback (
             feedback_id INT AUTO_INCREMENT PRIMARY KEY,
             employee_id INT NOT NULL,
