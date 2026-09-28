@@ -63,7 +63,7 @@ class Complaint(db.Model):
     __tablename__ = "complaints"
     __table_args__ = (
         db.CheckConstraint("priority IN ('Low', 'Medium', 'High', 'Critical')", name="ck_complaint_priority"),
-        db.CheckConstraint("status IN ('Pending', 'Assigned', 'In Progress', 'Resolved', 'Rejected')", name="ck_complaint_status"),
+        db.CheckConstraint("status IN ('Draft', 'Pending', 'Assigned', 'In Progress', 'Resolved', 'Rejected')", name="ck_complaint_status"),
         db.Index("ix_complaint_status_priority_created", "status", "priority", "created_at"),
         db.Index("ix_complaint_employee_created", "employee_id", "created_at"),
     )
@@ -73,6 +73,11 @@ class Complaint(db.Model):
     category_id = db.Column(db.ForeignKey("categories.id"), nullable=False, index=True)
     title = db.Column(db.String(255), nullable=False)
     description = db.Column(db.Text, nullable=False)
+    location = db.Column(db.String(255), nullable=False)
+    reported_department = db.Column(db.String(100), nullable=False, index=True)
+    equipment_serial_number = db.Column(db.String(150))
+    symptoms = db.Column(db.Text, nullable=False)
+    operational_impact = db.Column(db.Text, nullable=False)
     priority = db.Column(db.String(20), nullable=False, default="Medium", index=True)
     status = db.Column(db.String(20), nullable=False, default="Pending", index=True)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
