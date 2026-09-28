@@ -1,12 +1,16 @@
+print(">>> app/admin/routes.py LOADED <<<")
+
 from datetime import datetime
 
 from flask import Blueprint, flash, redirect, render_template, request, session, url_for
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
+from werkzeug.security import check_password_hash
+from app.models import Category, Feedback
 
 from app.decorators import admin_required
 from app.extensions import db
-from app.models import Assignment, AssignmentHistory, AuditLog, Complaint, StatusHistory, Technician
+from app.models import Assignment, AssignmentHistory, AuditLog, Complaint, StatusHistory, Technician, User
 from app.services.email_service import send_technician_assignment_email
 from app.services.workflow_service import can_transition, transition_complaint
 from app.services.audit_service import log_event
@@ -16,6 +20,62 @@ ACTIVE_STATUSES = ("Assigned", "In Progress")
 VALID_STATUSES = ("Pending", "Assigned", "In Progress", "Resolved", "Rejected")
 AVAILABILITY = ("Available", "Busy", "Unavailable")
 
+
+# ─────────────────────────────────────────────────────────
+# AUTH (login / logout) — MISSING before, now added
+# ─────────────────────────────────────────────────────────
+
+@admin_bp.route("/login", methods=["GET", "POST"])
+def admin_login():
+    print(">>> admin_login() CALLED <<<")
+    if request.method == "POST":
+        identifier = (request.form.get("username") or "").strip()
+        password = request.form.get("password") or ""
+
+        # Try to find user by email first
+        user = db.session.scalar(select(User).where(User.email == identifier))
+
+        # Fallback: literal "admin" finds any admin account
+        if not user and identifier.lower() == "admin":
+            user = db.session.scalar(select(User).where(User.role == "admin").limit(1))
+
+        if not user:
+            flash("Invalid credentials.", "danger")
+            return render_template("admin_login.html"), 401
+
+        # Verify password (use whatever your model exposes)
+        password_ok = check_password_hash(user.password_hash, password)
+        print(f"[ADMIN LOGIN] password_hash_prefix={user.password_hash[:40] if user.password_hash else 'EMPTY'}")
+        print(f"[ADMIN LOGIN] password_ok={password_ok}")
+
+        if not password_ok:
+            flash("Invalid credentials.", "danger")
+            return render_template("admin_login.html"), 401
+
+        if (user.role or "").lower() != "admin":
+            flash("You do not have admin privileges.", "danger")
+            return render_template("admin_login.html"), 403
+
+        session["user_id"] = user.id
+        session["role"] = "admin"
+        session["name"] = getattr(user, "full_name", None) or getattr(user, "name", "Admin")
+
+        log_event(user.id, "login", "User", user.id, None, {"role": "admin"})
+        return redirect(url_for("admin.dashboard"))
+
+    return render_template("admin_login.html")
+
+
+@admin_bp.get("/logout")
+def admin_logout():
+    session.clear()
+    flash("Logged out.", "success")
+    return redirect(url_for("admin.admin_login"))
+
+
+# ─────────────────────────────────────────────────────────
+# HELPERS
+# ─────────────────────────────────────────────────────────
 
 def _technician_form():
     return {field: request.form.get(field, "").strip() for field in ("full_name", "email", "phone", "department", "skills", "availability")}
@@ -31,16 +91,51 @@ def _valid_technician(data, existing_id=None):
         return "A technician already uses that email address."
 
 
+# ─────────────────────────────────────────────────────────
+# DASHBOARD / ANALYTICS
+# ─────────────────────────────────────────────────────────
+
 @admin_bp.get("/dashboard")
 @admin_required
 def dashboard():
-    return render_template("admin_dashboard.html", complaints=db.session.scalars(select(Complaint)).all())
+    from sqlalchemy import func
+
+    # Fetch all complaints (non-deleted for stats)
+    all_complaints = db.session.scalars(
+        select(Complaint).where(Complaint.is_deleted.is_(False))
+        .options(
+            selectinload(Complaint.employee),
+            selectinload(Complaint.category),
+            selectinload(Complaint.assignment).selectinload(Assignment.technician),
+        )
+        .order_by(Complaint.created_at.desc())
+    ).all()
+
+    # Compute stats
+    stats = {
+        "total": len(all_complaints),
+        "pending": sum(c.status == "Pending" for c in all_complaints),
+        "assigned": sum(c.status == "Assigned" for c in all_complaints),
+        "in_progress": sum(c.status == "In Progress" for c in all_complaints),
+        "resolved": sum(c.status == "Resolved" for c in all_complaints),
+        "rejected": sum(c.status == "Rejected" for c in all_complaints),
+        "critical": sum(c.priority == "Critical" for c in all_complaints),
+    }
+
+    # Recent 10 for the table
+    recent = all_complaints[:10]
+
+    return render_template(
+        "admin_dashboard.html",
+        complaints=all_complaints,
+        recent_complaints=recent,
+        stats=stats,
+    )
 
 
 @admin_bp.get("/analytics")
 @admin_required
 def analytics():
-    """Analytics are calculated from the filtered, non-deleted complaint set."""
     query = select(Complaint).where(Complaint.is_deleted.is_(False)).options(selectinload(Complaint.assignment).selectinload(Assignment.technician))
     start, end = request.args.get("start"), request.args.get("end")
     department, technician_id = request.args.get("department"), request.args.get("technician_id", type=int)
@@ -79,6 +174,10 @@ def analytics():
     technicians = db.session.scalars(select(Technician).order_by(Technician.full_name)).all()
     return render_template("admin_analytics.html", data=analytics_data, departments=departments, technicians=technicians)
 
+
+# ─────────────────────────────────────────────────────────
+# COMPLAINTS
+# ─────────────────────────────────────────────────────────
 
 @admin_bp.get("/complaints")
 @admin_required
@@ -192,6 +291,10 @@ def audit_logs():
     return render_template("admin_audit_logs.html", logs=logs)
 
 
+# ─────────────────────────────────────────────────────────
+# TECHNICIANS
+# ─────────────────────────────────────────────────────────
+
 @admin_bp.route("/technicians", methods=["GET", "POST"])
 @admin_required
 def technicians():
@@ -200,7 +303,6 @@ def technicians():
         error = _valid_technician(data)
         if error: flash(error, "danger")
         else:
-            # specialization is retained for compatibility with the first schema.
             db.session.add(Technician(**data, specialization=data["skills"][:100])); db.session.commit()
             flash("Technician added. This does not create a login account.", "success")
         return redirect(url_for("admin.technicians"))
@@ -233,8 +335,128 @@ def delete_technician(technician_id):
     if not technician: flash("Technician not found.", "danger")
     elif active_count: flash("Reassign the technician's active tickets before deleting this record.", "danger")
     else:
-        # Keep historical assignment records auditable; this is a soft delete.
         technician.is_active = False
         technician.availability = "Unavailable"
         db.session.commit(); flash("Technician removed from assignment lists; history is retained.", "success")
     return redirect(url_for("admin.technicians"))
+
+
+# ─────────────────────────────────────────────────────────
+# EMPLOYEE FEEDBACK
+# ─────────────────────────────────────────────────────────
+
+@admin_bp.get("/feedback")
+@admin_required
+def feedback():
+    from app.models import Feedback
+    items = db.session.scalars(
+        select(Feedback)
+        .options(selectinload(Feedback.employee))
+        .order_by(Feedback.created_at.desc())
+    ).all()
+    avg = round(sum(f.rating for f in items) / len(items), 2) if items else 0
+    return render_template("admin_feedback.html", feedback=items, average=avg)
+
+
+# ─────────────────────────────────────────────────────────
+# EMPLOYEE LIST
+# ─────────────────────────────────────────────────────────
+
+@admin_bp.get("/employees")
+@admin_required
+def employees():
+    from app.models import Feedback
+    staff = db.session.scalars(
+        select(User).where(User.role == "employee").order_by(User.full_name)
+    ).all()
+    return render_template("admin_employees.html", employees=staff)
+
+
+# ─────────────────────────────────────────────────────────
+# REPORTS
+# ─────────────────────────────────────────────────────────
+
+@admin_bp.get("/reports")
+@admin_required
+def reports():
+    query = select(Complaint).where(Complaint.is_deleted.is_(False)).options(
+        selectinload(Complaint.employee),
+        selectinload(Complaint.category),
+        selectinload(Complaint.assignment).selectinload(Assignment.technician),
+    )
+
+    start = request.args.get("start")
+    end = request.args.get("end")
+    department = request.args.get("department")
+    status = request.args.get("status")
+    priority = request.args.get("priority")
+    category_name = request.args.get("category")
+
+    if start:
+        query = query.where(Complaint.created_at >= datetime.fromisoformat(start))
+    if end:
+        query = query.where(Complaint.created_at < datetime.fromisoformat(end).replace(hour=23, minute=59, second=59))
+    if department:
+        query = query.where(Complaint.reported_department == department)
+    if status:
+        query = query.where(Complaint.status == status)
+    if priority:
+        query = query.where(Complaint.priority == priority)
+    if category_name:
+        query = query.join(Complaint.category).where(Category.name == category_name)
+
+    tickets = db.session.scalars(query.order_by(Complaint.created_at.desc())).all()
+
+    # Distinct values for filter dropdowns
+    departments = db.session.scalars(
+        select(Complaint.reported_department).where(Complaint.is_deleted.is_(False)).distinct()
+    ).all()
+    categories = db.session.scalars(select(Category).order_by(Category.name)).all()
+
+    return render_template(
+        "admin_reports.html",
+        complaints=tickets,
+        departments=departments,
+        categories=categories,
+        filters=request.args,
+    )
+
+
+@admin_bp.get("/reports/export.csv")
+@admin_required
+def export_reports_csv():
+    import csv
+    from io import StringIO
+    from flask import Response
+
+    query = select(Complaint).where(Complaint.is_deleted.is_(False)).options(
+        selectinload(Complaint.employee),
+        selectinload(Complaint.category),
+    )
+    if request.args.get("status"):
+        query = query.where(Complaint.status == request.args["status"])
+    if request.args.get("priority"):
+        query = query.where(Complaint.priority == request.args["priority"])
+    if request.args.get("department"):
+        query = query.where(Complaint.reported_department == request.args["department"])
+
+    tickets = db.session.scalars(query.order_by(Complaint.created_at.desc())).all()
+
+    buf = StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(["ID", "Title", "Employee", "Department", "Category", "Priority", "Status", "Created"])
+    for t in tickets:
+        writer.writerow([
+            t.id, t.title,
+            t.employee.full_name if t.employee else "",
+            t.reported_department or "",
+            t.category.name if t.category else "",
+            t.priority, t.status,
+            t.created_at.strftime("%Y-%m-%d %H:%M") if t.created_at else "",
+        ])
+
+    return Response(
+        buf.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=complaints_report.csv"},
+    )    

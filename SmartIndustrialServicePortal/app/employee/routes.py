@@ -10,6 +10,9 @@ from app.models_tracking import ComplaintComment
 from app.services.workflow_service import sla_deadline
 from app.services.audit_service import log_event
 
+from app.models import User
+from werkzeug.security import generate_password_hash, check_password_hash
+
 employee_bp = Blueprint("employee", __name__)
 CATEGORY_NAMES = ("IT Support", "Electrical", "Water Supply", "Equipment Repair", "Safety Issue", "Housekeeping", "Network Problem", "Others")
 
@@ -120,3 +123,47 @@ def complaint_detail(complaint_id):
         return redirect(url_for("employee.complaint_detail", complaint_id=complaint_id))
     notifications = db.session.scalars(select(__import__('app.models', fromlist=['Notification']).Notification).where(__import__('app.models', fromlist=['Notification']).Notification.user_id == session["user_id"], __import__('app.models', fromlist=['Notification']).Notification.is_read.is_(False))).all()
     return render_template("complaint_detail.html", ticket=ticket, notifications=notifications)
+
+
+
+@employee_bp.route("/profile", methods=["GET", "POST"])
+@employee_required
+def profile():
+    user = db.session.get(User, session["user_id"])
+    if not user:
+        flash("User not found.", "danger")
+        return redirect(url_for("auth.login"))
+
+    if request.method == "POST":
+        full_name = request.form.get("full_name", "").strip()
+        password = request.form.get("password", "").strip()
+        confirm = request.form.get("confirm_password", "").strip()
+
+        if full_name:
+            # Handle both possible field names
+            if hasattr(user, "full_name"):
+                user.full_name = full_name
+            else:
+                user.name = full_name
+
+        if password:
+            if password != confirm:
+                flash("Passwords do not match.", "danger")
+                return redirect(url_for("employee.profile"))
+            if len(password) < 6:
+                flash("Password must be at least 6 characters.", "danger")
+                return redirect(url_for("employee.profile"))
+
+            # Handle both possible password methods
+            if hasattr(user, "set_password"):
+                user.set_password(password)
+            else:
+                user.password_hash = generate_password_hash(password)
+
+        db.session.commit()
+        log_event(session["user_id"], "update", "User", user.id, None, {"name": full_name})
+        flash("Profile updated successfully.", "success")
+        return redirect(url_for("employee.profile"))
+
+    return render_template("profile.html", employee=user)
+

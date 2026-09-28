@@ -1,9 +1,12 @@
 from pathlib import Path
 
-from flask import Flask
+from flask import Flask, app
 from dotenv import load_dotenv
-
+from app.admin.routes import admin_bp
 from app.extensions import csrf, db, limiter, mail, migrate
+
+app = Flask(__name__)  
+app.register_blueprint(admin_bp, url_prefix="/admin")
 
 
 def create_app(config_object=None):

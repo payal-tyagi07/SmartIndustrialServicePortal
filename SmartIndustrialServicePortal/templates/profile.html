@@ -11,15 +11,15 @@
         <div style="display: flex; flex-direction: column; gap: 1rem; margin-top: 1rem;">
             <div style="display: flex; justify-content: space-between; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-color);">
                 <strong>Employee ID</strong>
-                <span class="text-secondary">#{{ employee.employee_id }}</span>
+                <span class="text-secondary">#{{ employee.employee_id or employee.id }}</span>
             </div>
             <div style="display: flex; justify-content: space-between; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-color);">
                 <strong>Full Name</strong>
-                <span class="text-secondary">{{ employee.full_name }}</span>
+                <span class="text-secondary">{{ employee.full_name or employee.name }}</span>
             </div>
             <div style="display: flex; justify-content: space-between; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-color);">
                 <strong>Department</strong>
-                <span class="text-secondary">{{ employee.department }}</span>
+                <span class="text-secondary">{{ employee.department or 'N/A' }}</span>
             </div>
             <div style="display: flex; justify-content: space-between; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-color);">
                 <strong>Corporate Email</strong>
@@ -35,18 +35,34 @@
     <!-- Security Updates Form -->
     <div class="card">
         <h3 class="card-title">Update Security Profile</h3>
-        <form action="/profile" method="POST">
+        <form method="POST" action="{{ url_for('employee.profile') }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
             <div class="form-group">
                 <label for="full_name">Update Name</label>
-                <input type="text" id="full_name" name="full_name" value="{{ employee.full_name }}" required>
+                <input type="text" id="full_name" name="full_name"
+                       value="{{ employee.full_name or employee.name }}" required>
             </div>
+
             <div class="form-group">
                 <label for="password">Change Password</label>
-                <input type="password" id="password" name="password" placeholder="Enter new password to change">
-                <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">Leave empty if you do not wish to modify the password.</p>
+                <input type="password" id="password" name="password"
+                       placeholder="Enter new password to change" minlength="6">
+                <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                    Leave empty if you do not wish to modify the password.
+                </p>
             </div>
-            <button type="submit" class="btn btn-primary" style="margin-top: 1rem;">Save Changes</button>
+
+            <div class="form-group">
+                <label for="confirm_password">Confirm New Password</label>
+                <input type="password" id="confirm_password" name="confirm_password"
+                       placeholder="Re-enter new password">
+            </div>
+
+            <div style="display: flex; gap: 1rem; margin-top: 1rem;">
+                <button type="submit" class="btn btn-primary">Save Changes</button>
+                <a href="{{ url_for('employee.dashboard') }}" class="btn btn-secondary">Cancel</a>
+            </div>
         </form>
     </div>
 </div>

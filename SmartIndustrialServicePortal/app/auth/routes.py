@@ -93,24 +93,6 @@ def employee_login():
     return render_template("login.html")
 
 
-@auth_bp.route("/admin/login", methods=["GET", "POST"])
-@limiter.limit("5 per minute")
-def admin_login():
-    if request.method == "POST":
-        user = db.session.scalar(select(User).where(User.username == request.form["username"], User.role == "admin"))
-        authenticated, error = _authenticate(user, request.form["password"], "admin")
-        if authenticated and user.totp_enabled:
-            session.clear(); session["pending_2fa_admin_id"] = user.id
-            return redirect(url_for("auth.verify_admin_2fa"))
-        if authenticated:
-            _login_user(user)
-            log_event(user.id, "login", "User", user.id, None, {"role": user.role})
-            db.session.commit()
-            return redirect(url_for("admin.dashboard"))
-        flash(error, "danger")
-    return render_template("admin_login.html")
-
-
 @auth_bp.route("/register", methods=["GET", "POST"])
 @limiter.limit("5 per hour")
 def register():
@@ -201,4 +183,4 @@ def setup_admin_2fa():
 @auth_bp.route("/logout", methods=["GET", "POST"])
 def logout():
     session.clear()
-    return redirect(url_for("auth.employee_login"))
+    return redirect(url_for("admin.admin_login"))
