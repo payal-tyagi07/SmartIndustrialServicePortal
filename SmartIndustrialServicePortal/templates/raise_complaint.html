@@ -10,6 +10,7 @@
         <div class="form-group">
             <label for="title">Complaint Title</label>
             <input type="text" id="title" name="title" required placeholder="Enter a brief summary (e.g. Pump leaking near Shaft 4)">
+            <p class="form-hint">Enter a short problem title, then use the AI assistant to create an editable description draft.</p>
         </div>
 
         <div class="grid-2" style="margin-bottom: 0;">
@@ -46,8 +47,12 @@
         </div>
 
         <div class="form-group" style="margin-top: 1.25rem;">
-            <label for="description">Detailed Description</label>
-            <textarea id="description" name="description" rows="5" required placeholder="Explain the problem in detail. Please mention exact location, equipment serial number (if any), and symptoms. AI will suggest priority levels based on safety keywords."></textarea>
+            <div class="description-label-row">
+                <label for="description">Detailed Description</label>
+                <button type="button" class="ai-draft-button" id="ai-draft-button">&#10024; Generate AI draft</button>
+            </div>
+            <textarea id="description" name="description" rows="8" required placeholder="Enter a title above, then select Generate AI draft. Update the location, equipment/serial number, and symptoms before submitting."></textarea>
+            <p class="form-hint">The draft is only a starting point. Review and replace every bracketed field with the actual incident details.</p>
         </div>
 
         <div class="form-group">

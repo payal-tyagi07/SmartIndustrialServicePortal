@@ -433,6 +433,40 @@ body.dark-theme .moon-icon {
     color: var(--text-primary);
 }
 
+.description-label-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.description-label-row label {
+    margin-bottom: 0;
+}
+
+.ai-draft-button {
+    border: 1px solid var(--info);
+    border-radius: 0.4rem;
+    padding: 0.38rem 0.7rem;
+    background: var(--info-light);
+    color: var(--info);
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.8rem;
+    font-weight: 700;
+}
+
+.ai-draft-button:hover {
+    background: var(--primary-light);
+}
+
+.form-hint {
+    margin-top: 0.4rem;
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+    line-height: 1.4;
+}
+
 input, textarea, select {
     width: 100%;
     padding: 0.75rem 1rem;

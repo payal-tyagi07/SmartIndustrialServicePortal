@@ -5,6 +5,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const aiSuggestionBox = document.getElementById('ai-suggestion-box');
     const suggestionText = document.getElementById('ai-suggestion-text');
     const applyBtn = document.getElementById('ai-suggestion-apply');
+    const draftBtn = document.getElementById('ai-draft-button');
+    const categorySelect = document.getElementById('category');
 
     if (!titleInput || !descInput || !prioritySelect || !aiSuggestionBox) return;
 
@@ -56,5 +58,35 @@ document.addEventListener('DOMContentLoaded', () => {
                 prioritySelect.style.outline = 'none';
             }, 1000);
         });
+    }
+
+    function titleCase(value) {
+        return value.replace(/\s+/g, ' ').trim().replace(/\b\w/g, letter => letter.toUpperCase());
+    }
+
+    function buildDescriptionDraft() {
+        const title = titleInput.value.trim();
+        if (!title) {
+            titleInput.focus();
+            titleInput.setCustomValidity('Enter a complaint title before generating a draft.');
+            titleInput.reportValidity();
+            titleInput.setCustomValidity('');
+            return;
+        }
+
+        const category = categorySelect && categorySelect.value ? categorySelect.value : 'service request';
+        const draft = `Issue reported: ${titleCase(title)}.\n\nLocation: [Enter the exact plant / building / floor / area]\n\nEquipment / asset / serial number: [Enter equipment name and serial number, if available]\n\nObserved symptoms: [Describe what is happening, when it started, any error messages, sounds, leaks, damage, or safety concerns]\n\nOperational impact: [State whether work is stopped, delayed, or affected]\n\nRequested assistance: Please inspect and resolve this ${category.toLowerCase()} issue.`;
+
+        if (descInput.value.trim() && !window.confirm('Replace the current description with a new AI draft?')) {
+            return;
+        }
+
+        descInput.value = draft;
+        descInput.focus();
+        analyzeText();
+    }
+
+    if (draftBtn) {
+        draftBtn.addEventListener('click', buildDescriptionDraft);
     }
 });
