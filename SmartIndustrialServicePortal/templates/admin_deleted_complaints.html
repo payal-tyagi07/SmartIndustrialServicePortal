@@ -1,0 +1,4 @@
+{% extends 'base.html' %}
+{% block title %}Deleted Complaints{% endblock %}
+{% block admin_header_title %}Deleted Complaints{% endblock %}
+{% block admin_content %}<div class="card"><div class="card-title">Restore complaints</div><table><thead><tr><th>ID</th><th>Title</th><th>Deleted at</th><th>Action</th></tr></thead><tbody>{% for ticket in complaints %}<tr><td>#{{ ticket.id }}</td><td>{{ ticket.title }}<br><small>{{ ticket.employee.full_name }}</small></td><td>{{ ticket.deleted_at.strftime('%Y-%m-%d %H:%M') }}</td><td><form method="post" action="{{ url_for('admin.restore_complaint', complaint_id=ticket.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="btn btn-primary btn-sm">Restore</button></form></td></tr>{% else %}<tr><td colspan="4">No deleted complaints.</td></tr>{% endfor %}</tbody></table></div>{% endblock %}

@@ -2,12 +2,13 @@ from datetime import datetime, timedelta
 from flask import Blueprint, flash, jsonify, redirect, render_template, request, session, url_for
 from sqlalchemy import func, select
 from app.extensions import db
-from app.models import Attachment, Category, Complaint, StatusHistory
+from app.models import Attachment, Category, Complaint, Feedback, StatusHistory
 from app.decorators import employee_required
 from app.services.ai_service import complaint_draft
 from app.services.uploads import save_attachment
 from app.models_tracking import ComplaintComment
 from app.services.workflow_service import sla_deadline
+from app.services.audit_service import log_event
 
 employee_bp = Blueprint("employee", __name__)
 CATEGORY_NAMES = ("IT Support", "Electrical", "Water Supply", "Equipment Repair", "Safety Issue", "Housekeeping", "Network Problem", "Others")
@@ -24,8 +25,8 @@ def _categories():
 @employee_bp.get("/dashboard")
 @employee_required
 def dashboard():
-    tickets = db.session.scalars(select(Complaint).where(Complaint.employee_id == session.get("user_id"), Complaint.status != "Draft").order_by(Complaint.created_at.desc()).limit(5)).all()
-    all_tickets = db.session.scalars(select(Complaint).where(Complaint.employee_id == session["user_id"], Complaint.status != "Draft")).all()
+    tickets = db.session.scalars(select(Complaint).where(Complaint.employee_id == session.get("user_id"), Complaint.status != "Draft", Complaint.is_deleted.is_(False)).order_by(Complaint.created_at.desc()).limit(5)).all()
+    all_tickets = db.session.scalars(select(Complaint).where(Complaint.employee_id == session["user_id"], Complaint.status != "Draft", Complaint.is_deleted.is_(False))).all()
     return render_template("employee_dashboard.html", recent_complaints=tickets, stats={"total": len(all_tickets), "active": sum(t.status not in ("Resolved", "Rejected") for t in all_tickets), "resolved": sum(t.status == "Resolved" for t in all_tickets)})
 
 @employee_bp.route("/raise_complaint", methods=["GET", "POST"])
@@ -68,6 +69,7 @@ def raise_complaint():
             stored_name, mime_type, storage_path, thumbnail_path = stored
             db.session.add(Attachment(complaint=complaint, stored_name=stored_name, original_name=request.files["attachment"].filename, mime_type=mime_type, storage_path=storage_path, thumbnail_path=thumbnail_path))
         db.session.add(StatusHistory(complaint=complaint, changed_by_id=session["user_id"], old_status="Draft" if draft else None, new_status="Pending", note="Submitted by employee."))
+        log_event(session["user_id"], "create", "Complaint", complaint.id, None, {"title": complaint.title, "priority": complaint.priority, "status": complaint.status})
     db.session.commit()
     if action == "draft":
         flash("Draft saved.", "success"); return redirect(url_for("employee.raise_complaint", draft=complaint.id))
@@ -84,17 +86,33 @@ def generate_description_draft():
 @employee_bp.get("/history")
 @employee_required
 def history():
-    query = select(Complaint).where(Complaint.employee_id == session["user_id"], Complaint.deleted_at.is_(None))
+    query = select(Complaint).where(Complaint.employee_id == session["user_id"], Complaint.is_deleted.is_(False))
     for field in ("status", "priority"):
         if request.args.get(field): query = query.where(getattr(Complaint, field) == request.args[field])
     if request.args.get("category"): query = query.join(Category).where(Category.name == request.args["category"])
     if request.args.get("from"): query = query.where(Complaint.created_at >= request.args["from"])
     return render_template("complaint_history.html", complaints=db.session.scalars(query.order_by(Complaint.created_at.desc())).all(), categories=_categories())
 
+
+@employee_bp.route("/feedback", methods=["GET", "POST"])
+@employee_required
+def feedback():
+    if request.method == "POST":
+        rating, message = request.form.get("rating", type=int), request.form.get("feedback", "").strip()
+        if rating not in (1, 2, 3, 4, 5) or not message:
+            flash("Please provide a rating and feedback message.", "danger")
+        else:
+            item = Feedback(employee_id=session["user_id"], rating=rating, message=message)
+            db.session.add(item); db.session.flush()
+            log_event(session["user_id"], "feedback", "Feedback", item.id, None, {"rating": rating})
+            db.session.commit(); flash("Feedback submitted.", "success")
+            return redirect(url_for("employee.feedback"))
+    return render_template("submit_feedback.html")
+
 @employee_bp.route("/complaints/<int:complaint_id>", methods=["GET", "POST"])
 @employee_required
 def complaint_detail(complaint_id):
-    ticket = db.session.scalar(select(Complaint).where(Complaint.id == complaint_id, Complaint.employee_id == session["user_id"], Complaint.deleted_at.is_(None)))
+    ticket = db.session.scalar(select(Complaint).where(Complaint.id == complaint_id, Complaint.employee_id == session["user_id"], Complaint.is_deleted.is_(False)))
     if not ticket: return "Not found", 404
     if request.method == "POST":
         message = request.form.get("message", "").strip()

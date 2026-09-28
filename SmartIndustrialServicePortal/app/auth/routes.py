@@ -9,6 +9,7 @@ from app.extensions import db, limiter
 from app.decorators import admin_required
 from app.models import User
 from app.services.email_service import send_password_reset_email
+from app.services.audit_service import log_event
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -85,6 +86,8 @@ def employee_login():
         authenticated, error = _authenticate(user, request.form["password"], "employee")
         if authenticated:
             _login_user(user)
+            log_event(user.id, "login", "User", user.id, None, {"role": user.role})
+            db.session.commit()
             return redirect(url_for("employee.dashboard"))
         flash(error, "danger")
     return render_template("login.html")
@@ -101,6 +104,8 @@ def admin_login():
             return redirect(url_for("auth.verify_admin_2fa"))
         if authenticated:
             _login_user(user)
+            log_event(user.id, "login", "User", user.id, None, {"role": user.role})
+            db.session.commit()
             return redirect(url_for("admin.dashboard"))
         flash(error, "danger")
     return render_template("admin_login.html")
@@ -163,6 +168,8 @@ def verify_admin_2fa():
         return redirect(url_for("auth.admin_login"))
     if request.method == "POST" and pyotp.TOTP(user.totp_secret).verify(request.form["code"], valid_window=1):
         _login_user(user)
+        log_event(user.id, "login", "User", user.id, None, {"role": user.role, "2fa": True})
+        db.session.commit()
         return redirect(url_for("admin.dashboard"))
     if request.method == "POST":
         flash("Invalid verification code.", "danger")

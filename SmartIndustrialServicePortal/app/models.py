@@ -26,7 +26,7 @@ class User(db.Model):
 
     complaints = db.relationship("Complaint", back_populates="employee", foreign_keys="Complaint.employee_id")
     feedback_items = db.relationship("Feedback", back_populates="employee")
-    audit_events = db.relationship("AuditLog", back_populates="actor")
+    audit_events = db.relationship("AuditLog", back_populates="user")
     notifications = db.relationship("Notification", back_populates="user", cascade="all, delete-orphan")
 
     def set_password(self, password):
@@ -90,6 +90,8 @@ class Complaint(db.Model):
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
     updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
     deleted_at = db.Column(db.DateTime, nullable=True, index=True)
+    is_deleted = db.Column(db.Boolean, nullable=False, default=False, index=True)
+    deleted_by = db.Column(db.ForeignKey("users.id"), nullable=True, index=True)
 
     employee = db.relationship("User", back_populates="complaints", foreign_keys=[employee_id])
     category = db.relationship("Category", back_populates="complaints")
@@ -97,6 +99,7 @@ class Complaint(db.Model):
     status_history = db.relationship("StatusHistory", back_populates="complaint", cascade="all, delete-orphan")
     attachments = db.relationship("Attachment", back_populates="complaint", cascade="all, delete-orphan")
     comments = db.relationship("ComplaintComment", back_populates="complaint", cascade="all, delete-orphan")
+    deleted_by_user = db.relationship("User", foreign_keys=[deleted_by])
 
 
 class Assignment(db.Model):
@@ -180,17 +183,19 @@ class Feedback(db.Model):
 
 class AuditLog(db.Model):
     __tablename__ = "audit_logs"
-    __table_args__ = (db.Index("ix_audit_entity_created", "entity_type", "entity_id", "created_at"),)
+    __table_args__ = (db.Index("ix_audit_entity_created", "entity", "entity_id", "timestamp"),)
 
     id = db.Column(db.Integer, primary_key=True)
-    actor_id = db.Column(db.ForeignKey("users.id"), nullable=True, index=True)
+    user_id = db.Column(db.ForeignKey("users.id"), nullable=True, index=True)
     action = db.Column(db.String(100), nullable=False, index=True)
-    entity_type = db.Column(db.String(50), nullable=False)
+    entity = db.Column(db.String(50), nullable=False)
     entity_id = db.Column(db.Integer, nullable=False)
-    details = db.Column(db.JSON)
-    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+    old_value = db.Column(db.JSON)
+    new_value = db.Column(db.JSON)
+    ip = db.Column(db.String(45))
+    timestamp = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
 
-    actor = db.relationship("User", back_populates="audit_events")
+    user = db.relationship("User", back_populates="audit_events")
 
 
 class Notification(db.Model):
