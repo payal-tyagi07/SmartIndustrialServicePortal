@@ -6,69 +6,117 @@
 {% block content %}
 <div class="card" style="max-width: 800px; margin: 0 auto;">
     <h3 class="card-title">New Request Ticket</h3>
-    <form action="/raise_complaint" method="POST" enctype="multipart/form-data">
+    <form action="{{ url_for('employee.raise_complaint') }}" method="POST" enctype="multipart/form-data">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
         <div class="form-group">
             <label for="title">Complaint Title</label>
-            <input type="text" id="title" name="title" required placeholder="Enter a brief summary (e.g. Pump leaking near Shaft 4)">
-            <p class="form-hint">Enter a short problem title, then use the AI assistant to create an editable description draft.</p>
+            <input type="text" id="title" name="title" required
+                   value="{{ form.title if form else '' }}"
+                   placeholder="Enter a brief summary (e.g. Pump leaking near Shaft 4)">
+            <p class="form-hint">Short problem title. Use the AI assistant to build a description draft.</p>
         </div>
 
         <div class="grid-2" style="margin-bottom: 0;">
             <div class="form-group">
                 <label for="category">Request Category</label>
                 <select id="category" name="category" required>
-                    <option value="" disabled selected>Select Category</option>
-                    <option value="IT Support">IT Support</option>
-                    <option value="Electrical">Electrical</option>
-                    <option value="Water Supply">Water Supply</option>
-                    <option value="Equipment Repair">Equipment Repair</option>
-                    <option value="Safety Issue">Safety Issue</option>
-                    <option value="Housekeeping">Housekeeping</option>
-                    <option value="Network Problem">Network Problem</option>
-                    <option value="Others">Others</option>
+                    <option value="" disabled {% if not form or not form.category %}selected{% endif %}>Select Category</option>
+                    {% for cat in categories %}
+                        <option value="{{ cat.name }}" {% if form and form.category == cat.name %}selected{% endif %}>{{ cat.name }}</option>
+                    {% endfor %}
                 </select>
             </div>
 
             <div class="form-group">
                 <label for="priority">Priority Level</label>
                 <select id="priority" name="priority" required>
-                    <option value="Low">Low</option>
-                    <option value="Medium" selected>Medium</option>
-                    <option value="High">High</option>
-                    <option value="Critical">Critical</option>
+                    {% for p in ['Low', 'Medium', 'High', 'Critical'] %}
+                        <option value="{{ p }}" {% if form and form.priority == p %}selected{% elif not form and p == 'Medium' %}selected{% endif %}>{{ p }}</option>
+                    {% endfor %}
                 </select>
             </div>
         </div>
 
-        <!-- AI Priority Suggestion Panel -->
         <div class="ai-suggestion-box" id="ai-suggestion-box">
             <span>🤖 AI Recommends: <span class="suggestion" id="ai-suggestion-text">High</span> Priority based on keywords.</span>
             <button type="button" class="ai-suggestion-apply" id="ai-suggestion-apply">Apply Suggestion</button>
         </div>
 
-        <div class="form-group" style="margin-top: 1.25rem;">
+        <!-- NEW: Location and Department -->
+        <div class="grid-2" style="margin-top: 1.25rem;">
+            <div class="form-group">
+                <label for="location">Location <span style="color: red;">*</span></label>
+                <input type="text" id="location" name="location" required
+                       value="{{ form.location if form else '' }}"
+                       placeholder="e.g. Building A, Floor 2, Room 12">
+            </div>
+            <div class="form-group">
+                <label for="department">Reporting Department <span style="color: red;">*</span></label>
+                <input type="text" id="department" name="department" required
+                       value="{{ form.department if form else '' }}"
+                       placeholder="e.g. Production, IT, Maintenance">
+            </div>
+        </div>
+
+        <!-- NEW: Equipment / Serial -->
+        <div class="form-group">
+            <label for="equipment_serial_number">Equipment Name / Serial Number</label>
+            <input type="text" id="equipment_serial_number" name="equipment_serial_number"
+                   value="{{ form.equipment_serial_number if form else '' }}"
+                   placeholder="e.g. Compressor CP-204, Serial SN12345">
+        </div>
+
+        <!-- NEW: Symptoms -->
+        <div class="form-group">
+            <label for="symptoms">Symptoms <span style="color: red;">*</span></label>
+            <textarea id="symptoms" name="symptoms" rows="3" required
+                      placeholder="What is happening? e.g. Loud noise, oil leakage, overheating">{{ form.symptoms if form else '' }}</textarea>
+        </div>
+
+        <!-- NEW: Operational Impact -->
+        <div class="form-group">
+            <label for="operational_impact">Operational Impact <span style="color: red;">*</span></label>
+            <textarea id="operational_impact" name="operational_impact" rows="3" required
+                      placeholder="How does this affect work? e.g. Line stopped, production delayed">{{ form.operational_impact if form else '' }}</textarea>
+        </div>
+
+        <!-- Description with AI draft -->
+        <div class="form-group">
             <div class="description-label-row">
                 <label for="description">Detailed Description</label>
                 <button type="button" class="ai-draft-button" id="ai-draft-button">&#10024; Generate AI draft</button>
             </div>
-            <textarea id="description" name="description" rows="8" required placeholder="Enter a title above, then select Generate AI draft. Update the location, equipment/serial number, and symptoms before submitting."></textarea>
-            <p class="form-hint">The draft is only a starting point. Review and replace every bracketed field with the actual incident details.</p>
+            <textarea id="description" name="description" rows="6"
+                      placeholder="Generate a draft above, then edit before submitting.">{{ form.description if form else '' }}</textarea>
+            <p class="form-hint">Required when submitting. Optional when saving as draft.</p>
         </div>
 
+        <!-- Attachment -->
         <div class="form-group">
-            <label for="image">Attach Incident Photo / Document (Optional)</label>
-            <input
-  type="file"
-  id="attachment"
-  name="attachment"
-  accept=".jpg,.jpeg,.png,.pdf,.docx"
->
-            <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">Supported formats: JPG, PNG, GIF. Max file size: 5MB.</p>
+            <label for="attachment">Attach Incident Photo / Document (Optional)</label>
+            <input type="file" id="attachment" name="attachment"
+                   accept=".jpg,.jpeg,.png,.pdf,.docx">
+            <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 0.25rem;">
+                Supported: JPG, PNG, PDF, DOCX. Max 5MB.
+            </p>
         </div>
+
+        <!-- Duplicate warning (if any) -->
+        {% if duplicate %}
+        <div class="alert alert-warning" style="margin-top: 1rem;">
+            <strong>Similar active ticket #{{ duplicate.id }} found.</strong>
+            <label style="display: block; margin-top: 0.5rem;">
+                <input type="checkbox" name="allow_duplicate" value="true">
+                Yes, this is a separate issue — submit anyway.
+            </label>
+        </div>
+        {% endif %}
 
         <div style="display: flex; gap: 1rem; margin-top: 2rem;">
-            <button type="submit" class="btn btn-primary">Submit Ticket</button>
-            <a href="/dashboard" class="btn btn-secondary">Cancel</a>
+            <button type="submit" name="action" value="submit" class="btn btn-primary">Submit Ticket</button>
+            <button type="submit" name="action" value="draft" class="btn btn-secondary">Save as Draft</button>
+            <a href="{{ url_for('employee.dashboard') }}" class="btn btn-secondary">Cancel</a>
         </div>
     </form>
 </div>

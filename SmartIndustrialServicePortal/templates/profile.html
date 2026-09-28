@@ -36,6 +36,7 @@
     <div class="card">
         <h3 class="card-title">Update Security Profile</h3>
         <form action="/profile" method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="form-group">
                 <label for="full_name">Update Name</label>
                 <input type="text" id="full_name" name="full_name" value="{{ employee.full_name }}" required>
