@@ -22,6 +22,7 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), "static", "uploads")
     MAX_CONTENT_LENGTH = 5 * 1024 * 1024
+    UPLOAD_BACKEND = os.environ.get("UPLOAD_BACKEND", "local")
     WTF_CSRF_TIME_LIMIT = 3600
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = "Lax"

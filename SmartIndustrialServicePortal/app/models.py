@@ -78,16 +78,21 @@ class Complaint(db.Model):
     equipment_serial_number = db.Column(db.String(150))
     symptoms = db.Column(db.Text, nullable=False)
     operational_impact = db.Column(db.Text, nullable=False)
+    admin_notes = db.Column(db.Text)
+    eta_at = db.Column(db.DateTime)
+    sla_due_at = db.Column(db.DateTime, index=True)
     priority = db.Column(db.String(20), nullable=False, default="Medium", index=True)
     status = db.Column(db.String(20), nullable=False, default="Pending", index=True)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
     updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    deleted_at = db.Column(db.DateTime, nullable=True, index=True)
 
     employee = db.relationship("User", back_populates="complaints", foreign_keys=[employee_id])
     category = db.relationship("Category", back_populates="complaints")
     assignment = db.relationship("Assignment", back_populates="complaint", uselist=False, cascade="all, delete-orphan")
     status_history = db.relationship("StatusHistory", back_populates="complaint", cascade="all, delete-orphan")
     attachments = db.relationship("Attachment", back_populates="complaint", cascade="all, delete-orphan")
+    comments = db.relationship("ComplaintComment", back_populates="complaint", cascade="all, delete-orphan")
 
 
 class Assignment(db.Model):
@@ -129,6 +134,8 @@ class Attachment(db.Model):
     stored_name = db.Column(db.String(255), nullable=False, unique=True)
     original_name = db.Column(db.String(255), nullable=False)
     mime_type = db.Column(db.String(100), nullable=False)
+    storage_path = db.Column(db.String(500), nullable=False)
+    thumbnail_path = db.Column(db.String(500))
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
 
     complaint = db.relationship("Complaint", back_populates="attachments")
@@ -174,3 +181,7 @@ class Notification(db.Model):
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
 
     user = db.relationship("User", back_populates="notifications")
+
+
+# Register optional tracking tables with the same SQLAlchemy metadata.
+from app.models_tracking import ComplaintComment  # noqa: E402,F401

@@ -6,6 +6,7 @@ from app.models import Attachment, Category, Complaint, StatusHistory
 from app.decorators import employee_required
 from app.services.ai_service import complaint_draft
 from app.services.uploads import save_attachment
+from app.models_tracking import ComplaintComment
 
 employee_bp = Blueprint("employee", __name__)
 CATEGORY_NAMES = ("IT Support", "Electrical", "Water Supply", "Equipment Repair", "Safety Issue", "Housekeeping", "Network Problem", "Others")
@@ -54,7 +55,9 @@ def raise_complaint():
         try: stored = save_attachment(request.files.get("attachment"))
         except ValueError as error:
             db.session.rollback(); flash(str(error), "danger"); return render_template("raise_complaint.html", categories=category_list, form=data), 400
-        if stored: db.session.add(Attachment(complaint=complaint, stored_name=stored, original_name=request.files["attachment"].filename, mime_type=request.files["attachment"].mimetype or "application/octet-stream"))
+        if stored:
+            stored_name, mime_type, storage_path, thumbnail_path = stored
+            db.session.add(Attachment(complaint=complaint, stored_name=stored_name, original_name=request.files["attachment"].filename, mime_type=mime_type, storage_path=storage_path, thumbnail_path=thumbnail_path))
         db.session.add(StatusHistory(complaint=complaint, changed_by_id=session["user_id"], new_status="Pending", note="Submitted by employee."))
     db.session.commit()
     if action == "draft":
@@ -68,3 +71,25 @@ def generate_description_draft():
     title, category = str(payload.get("title", "")).strip(), str(payload.get("category", "")).strip()
     if not title or category not in CATEGORY_NAMES: return jsonify(error="Enter a title and category first."), 400
     return jsonify(description=complaint_draft(title, category))
+
+@employee_bp.get("/history")
+@employee_required
+def history():
+    query = select(Complaint).where(Complaint.employee_id == session["user_id"], Complaint.deleted_at.is_(None))
+    for field in ("status", "priority"):
+        if request.args.get(field): query = query.where(getattr(Complaint, field) == request.args[field])
+    if request.args.get("category"): query = query.join(Category).where(Category.name == request.args["category"])
+    if request.args.get("from"): query = query.where(Complaint.created_at >= request.args["from"])
+    return render_template("complaint_history.html", complaints=db.session.scalars(query.order_by(Complaint.created_at.desc())).all(), categories=_categories())
+
+@employee_bp.route("/complaints/<int:complaint_id>", methods=["GET", "POST"])
+@employee_required
+def complaint_detail(complaint_id):
+    ticket = db.session.scalar(select(Complaint).where(Complaint.id == complaint_id, Complaint.employee_id == session["user_id"], Complaint.deleted_at.is_(None)))
+    if not ticket: return "Not found", 404
+    if request.method == "POST":
+        message = request.form.get("message", "").strip()
+        if message: db.session.add(ComplaintComment(complaint=ticket, author_id=session["user_id"], message=message)); db.session.commit()
+        return redirect(url_for("employee.complaint_detail", complaint_id=complaint_id))
+    notifications = db.session.scalars(select(__import__('app.models', fromlist=['Notification']).Notification).where(__import__('app.models', fromlist=['Notification']).Notification.user_id == session["user_id"], __import__('app.models', fromlist=['Notification']).Notification.is_read.is_(False))).all()
+    return render_template("complaint_detail.html", ticket=ticket, notifications=notifications)
