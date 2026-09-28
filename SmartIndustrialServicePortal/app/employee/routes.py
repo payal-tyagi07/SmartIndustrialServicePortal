@@ -7,6 +7,7 @@ from app.decorators import employee_required
 from app.services.ai_service import complaint_draft
 from app.services.uploads import save_attachment
 from app.models_tracking import ComplaintComment
+from app.services.workflow_service import sla_deadline
 
 employee_bp = Blueprint("employee", __name__)
 CATEGORY_NAMES = ("IT Support", "Electrical", "Water Supply", "Equipment Repair", "Safety Issue", "Housekeeping", "Network Problem", "Others")
@@ -24,7 +25,8 @@ def _categories():
 @employee_required
 def dashboard():
     tickets = db.session.scalars(select(Complaint).where(Complaint.employee_id == session.get("user_id"), Complaint.status != "Draft").order_by(Complaint.created_at.desc()).limit(5)).all()
-    return render_template("employee_dashboard.html", recent_complaints=tickets, stats={})
+    all_tickets = db.session.scalars(select(Complaint).where(Complaint.employee_id == session["user_id"], Complaint.status != "Draft")).all()
+    return render_template("employee_dashboard.html", recent_complaints=tickets, stats={"total": len(all_tickets), "active": sum(t.status not in ("Resolved", "Rejected") for t in all_tickets), "resolved": sum(t.status == "Resolved" for t in all_tickets)})
 
 @employee_bp.route("/raise_complaint", methods=["GET", "POST"])
 @employee_required
@@ -46,9 +48,16 @@ def raise_complaint():
     if action == "submit" and duplicate and request.form.get("allow_duplicate") != "true":
         flash(f"Similar active request #{duplicate.id} found. Confirm only if this is separate.", "warning")
         return render_template("raise_complaint.html", categories=category_list, draft=draft, form=data, duplicate=duplicate), 409
-    complaint = draft or Complaint(employee_id=session["user_id"], category=category, **data)
-    for name, value in data.items(): setattr(complaint, name, value)
+    complaint_data = {
+        "title": data["title"], "priority": data["priority"], "location": data["location"],
+        "reported_department": data["department"], "equipment_serial_number": data["equipment_serial_number"],
+        "symptoms": data["symptoms"], "operational_impact": data["operational_impact"], "description": data["description"],
+    }
+    complaint = draft or Complaint(employee_id=session["user_id"], category=category, **complaint_data)
+    for name, value in complaint_data.items(): setattr(complaint, name, value)
     complaint.category, complaint.status = category, ("Draft" if action == "draft" else "Pending")
+    if action == "submit":
+        complaint.sla_due_at = sla_deadline(complaint.priority)
     if not draft: db.session.add(complaint)
     db.session.flush()
     if action == "submit":
@@ -58,7 +67,7 @@ def raise_complaint():
         if stored:
             stored_name, mime_type, storage_path, thumbnail_path = stored
             db.session.add(Attachment(complaint=complaint, stored_name=stored_name, original_name=request.files["attachment"].filename, mime_type=mime_type, storage_path=storage_path, thumbnail_path=thumbnail_path))
-        db.session.add(StatusHistory(complaint=complaint, changed_by_id=session["user_id"], new_status="Pending", note="Submitted by employee."))
+        db.session.add(StatusHistory(complaint=complaint, changed_by_id=session["user_id"], old_status="Draft" if draft else None, new_status="Pending", note="Submitted by employee."))
     db.session.commit()
     if action == "draft":
         flash("Draft saved.", "success"); return redirect(url_for("employee.raise_complaint", draft=complaint.id))

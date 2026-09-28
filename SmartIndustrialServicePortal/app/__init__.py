@@ -18,6 +18,10 @@ def create_app(config_object=None):
     csrf.init_app(application)
     limiter.init_app(application)
     mail.init_app(application)
+    @application.template_filter("sla_countdown")
+    def sla_countdown(due_at):
+        from app.services.workflow_service import countdown_text
+        return countdown_text(due_at)
 
     from app.auth.routes import auth_bp
     from app.employee.routes import employee_bp

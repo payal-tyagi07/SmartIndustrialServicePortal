@@ -52,11 +52,15 @@ class Technician(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     full_name = db.Column(db.String(100), nullable=False)
-    specialization = db.Column(db.String(100), nullable=False)
-    phone = db.Column(db.String(30))
+    email = db.Column(db.String(120), unique=True, nullable=False, index=True)
+    phone = db.Column(db.String(30), nullable=False)
+    department = db.Column(db.String(100), nullable=False, index=True)
+    skills = db.Column(db.Text, nullable=False)
+    availability = db.Column(db.String(20), nullable=False, default="Available", index=True)
     is_active = db.Column(db.Boolean, nullable=False, default=True, index=True)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     assignments = db.relationship("Assignment", back_populates="technician")
+    assignment_history = db.relationship("AssignmentHistory", back_populates="technician", foreign_keys="AssignmentHistory.technician_id")
 
 
 class Complaint(db.Model):
@@ -107,6 +111,25 @@ class Assignment(db.Model):
 
     complaint = db.relationship("Complaint", back_populates="assignment")
     technician = db.relationship("Technician", back_populates="assignments")
+    assigned_by = db.relationship("User", foreign_keys=[assigned_by_id])
+
+
+class AssignmentHistory(db.Model):
+    """An immutable record for every assignment and reassignment made by an admin."""
+    __tablename__ = "assignment_history"
+    __table_args__ = (db.Index("ix_assignment_history_complaint_created", "complaint_id", "created_at"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    complaint_id = db.Column(db.ForeignKey("complaints.id", ondelete="CASCADE"), nullable=False, index=True)
+    technician_id = db.Column(db.ForeignKey("technicians.id"), nullable=False, index=True)
+    assigned_by_id = db.Column(db.ForeignKey("users.id"), nullable=False)
+    previous_technician_id = db.Column(db.ForeignKey("technicians.id"), nullable=True)
+    note = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+
+    complaint = db.relationship("Complaint", foreign_keys=[complaint_id])
+    technician = db.relationship("Technician", foreign_keys=[technician_id], back_populates="assignment_history")
+    previous_technician = db.relationship("Technician", foreign_keys=[previous_technician_id])
     assigned_by = db.relationship("User", foreign_keys=[assigned_by_id])
 
 
