@@ -10,6 +10,7 @@
             <p>Authorized access console for system administrators</p>
         </div>
         <form action="/admin/login" method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="form-group">
                 <label for="username">Username</label>
                 <input type="text" id="username" name="username" required placeholder="e.g. admin">

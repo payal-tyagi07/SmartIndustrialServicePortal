@@ -3,7 +3,7 @@ from pathlib import Path
 from flask import Flask
 from dotenv import load_dotenv
 
-from app.extensions import csrf, db, migrate
+from app.extensions import csrf, db, limiter, mail, migrate
 
 
 def create_app(config_object=None):
@@ -16,6 +16,8 @@ def create_app(config_object=None):
     db.init_app(application)
     migrate.init_app(application, db)
     csrf.init_app(application)
+    limiter.init_app(application)
+    mail.init_app(application)
 
     from app.auth.routes import auth_bp
     from app.employee.routes import employee_bp

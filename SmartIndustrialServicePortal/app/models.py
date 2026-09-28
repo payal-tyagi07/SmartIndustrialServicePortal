@@ -17,6 +17,11 @@ class User(db.Model):
     role = db.Column(db.String(20), nullable=False, index=True)  # employee or admin only
     password_hash = db.Column(db.String(255), nullable=False)
     is_active = db.Column(db.Boolean, nullable=False, default=True)
+    failed_login_count = db.Column(db.SmallInteger, nullable=False, default=0)
+    locked_until = db.Column(db.DateTime, nullable=True, index=True)
+    password_changed_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    totp_secret = db.Column(db.String(64), nullable=True)
+    totp_enabled = db.Column(db.Boolean, nullable=False, default=False)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
 
     complaints = db.relationship("Complaint", back_populates="employee", foreign_keys="Complaint.employee_id")
@@ -26,6 +31,7 @@ class User(db.Model):
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
+        self.password_changed_at = datetime.utcnow()
 
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)

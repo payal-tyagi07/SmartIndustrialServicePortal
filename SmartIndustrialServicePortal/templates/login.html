@@ -10,6 +10,7 @@
             <p>Access your industrial request account</p>
         </div>
         <form action="/login" method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="form-group">
                 <label for="email">Corporate Email</label>
                 <input type="email" id="email" name="email" required placeholder="e.g. rajesh@nlc.com">
@@ -22,6 +23,7 @@
         </form>
         <div class="auth-footer">
             <p>New to the portal? <a href="/register">Register here</a></p>
+            <p><a href="/password-reset">Forgot your password?</a></p>
             <p style="margin-top: 0.5rem;"><a href="/admin/login" style="color: var(--text-secondary); font-size: 0.8rem;">Admin Login Gateway &rarr;</a></p>
         </div>
     </div>

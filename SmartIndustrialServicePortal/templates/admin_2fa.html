@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+{% block title %}Admin Verification - Smart Industrial Portal{% endblock %}
+{% block public_content %}
+<div class="auth-wrapper"><div class="auth-card">
+  <div class="auth-header"><h1>Admin Verification</h1><p>Enter the six-digit code from your authenticator app.</p></div>
+  <form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="form-group"><label for="code">Authenticator code</label><input id="code" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required autocomplete="one-time-code"></div>
+    <button class="btn btn-primary" type="submit">Verify</button>
+  </form>
+</div></div>
+{% endblock %}

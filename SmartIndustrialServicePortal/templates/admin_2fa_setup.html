@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+{% block title %}Set Up Admin 2FA - Smart Industrial Portal{% endblock %}
+{% block admin_content %}
+<div class="card" style="max-width: 620px;">
+  <h3 class="card-title">Set Up Optional Two-Factor Authentication</h3>
+  <p style="margin-bottom: 1rem; color: var(--text-secondary);">Add this key to an authenticator app, then enter its current six-digit code. Keep the key private.</p>
+  <div class="form-group"><label>Manual setup key</label><input value="{{ secret }}" readonly></div>
+  <div class="form-group"><label>Authenticator URI</label><textarea rows="3" readonly>{{ provisioning_uri }}</textarea></div>
+  <form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="form-group"><label for="code">Verification code</label><input id="code" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required></div>
+    <button class="btn btn-primary" type="submit">Enable 2FA</button>
+  </form>
+</div>
+{% endblock %}
