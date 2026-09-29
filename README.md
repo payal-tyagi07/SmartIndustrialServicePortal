@@ -288,22 +288,6 @@ Tests cover auth, RBAC, complaint creation, file validation, admin status workfl
 
 ---
 
-## 📊 Screenshots
-
-| Login | Employee Dashboard |
-|---|---|
-| ![Login](docs/screenshots/login.png) | ![Employee Dashboard](docs/screenshots/employee_dashboard.png) |
-
-| Raise Complaint | Admin Dashboard |
-|---|---|
-| ![Raise Complaint](docs/screenshots/raise_complaint.png) | ![Admin Dashboard](docs/screenshots/admin_dashboard.png) |
-
-| Analytics | Audit Logs |
-|---|---|
-| ![Analytics](docs/screenshots/admin_analytics.png) | ![Audit Logs](docs/screenshots/audit_logs.png) |
-
----
-
 ## 📈 Key Metrics
 
 - **MTTR (Mean Time To Repair)** — average resolution time per complaint
